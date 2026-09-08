@@ -31,7 +31,7 @@ jobs:
         working-directory: typescript
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
 
@@ -73,7 +73,7 @@ jobs:
       - name: Restore Yarn cache
         if: steps.changes.outputs.deployment_required == 'true'
         id: yarn-cache
-        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: typescript/.yarn/cache
           key: yarn-${{ runner.os }}-${{ hashFiles('typescript/yarn.lock', 'typescript/.yarnrc.yml', 'typescript/.yarn/releases/yarn-4.16.0.cjs') }}
@@ -85,7 +85,7 @@ jobs:
 
       - name: Save Yarn cache
         if: steps.changes.outputs.deployment_required == 'true' && steps.yarn-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: typescript/.yarn/cache
           key: ${{ steps.yarn-cache.outputs.cache-primary-key }}
