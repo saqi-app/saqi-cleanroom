@@ -1,0 +1,217 @@
+name: Deploy to Cloudflare
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full main commit SHA approved for production
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  deployments: read # Resolve the last successful deployment as the diff baseline.
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Verify and deploy approved commit
+    if: >-
+      github.repository == 'saqi-app/saqi' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'nmaswood'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require the approved production commit
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+
+      - name: Test secret configuration contract
+        working-directory: .
+        run: node .github/scripts/configure-ops-secrets.test.mjs
+
+      - name: Resolve previous successful production deployment
+        id: deployment-base
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash ../.github/scripts/successful-deployment-base.sh
+
+      - name: Resolve affected deployments
+        id: changes
+        env:
+          BASE_SHA: ${{ steps.deployment-base.outputs.base_sha }}
+        run: bash ../.github/scripts/affected-artifacts.sh deploy "$BASE_SHA" "$GITHUB_SHA" "$GITHUB_EVENT_NAME"
+
+      - name: Setup Node.js
+        if: steps.changes.outputs.deployment_required == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: typescript/.nvmrc
+
+      - name: Restore Yarn cache
+        if: steps.changes.outputs.deployment_required == 'true'
+        id: yarn-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: typescript/.yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('typescript/yarn.lock', 'typescript/.yarnrc.yml', 'typescript/.yarn/releases/yarn-4.16.0.cjs') }}
+          restore-keys: yarn-${{ runner.os }}-
+
+      - name: Install dependencies
+        if: steps.changes.outputs.deployment_required == 'true'
+        run: corepack enable && yarn install --immutable --mode=skip-build
+
+      - name: Save Yarn cache
+        if: steps.changes.outputs.deployment_required == 'true' && steps.yarn-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: typescript/.yarn/cache
+          key: ${{ steps.yarn-cache.outputs.cache-primary-key }}
+
+      - name: Build shared libraries
+        if: steps.changes.outputs.deployment_required == 'true'
+        run: yarn build:api
+
+      - name: Reject high and critical dependency advisories
+        if: steps.changes.outputs.deployment_required == 'true' && steps.changes.outputs.dependency_audit == 'true'
+        run: yarn audit:high
+
+      - name: Verify source
+        if: steps.changes.outputs.deployment_required == 'true'
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: yarn check:built && yarn test:built && yarn knip
+
+      - name: Build application Worker
+        if: steps.changes.outputs.app == 'true'
+        run: yarn workspace @saqi/app opennext:build
+
+      - name: Build and validate the public Worker
+        if: steps.changes.outputs.site == 'true'
+        run: yarn build && yarn validate:build
+        working-directory: typescript/packages/site
+        env:
+          SAQI_WRANGLER_CONFIG: wrangler.production.jsonc
+
+      - name: Validate application Worker artifact
+        if: steps.changes.outputs.app == 'true'
+        env:
+          OPEN_NEXT_DEPLOY: "true"
+        run: >-
+          yarn workspace @saqi/app wrangler deploy --dry-run
+          --outdir "${RUNNER_TEMP:?RUNNER_TEMP must be set}/ops-dry-run"
+
+      - name: Validate public artifact
+        if: steps.changes.outputs.site == 'true'
+        run: >-
+          yarn workspace @saqi/site wrangler deploy --dry-run
+          --config dist/server/wrangler.json
+          --outdir "${RUNNER_TEMP:?RUNNER_TEMP must be set}/public-dry-run"
+
+      - name: Validate www redirect artifact
+        if: steps.changes.outputs.www == 'true'
+        env:
+          SAQI_WRANGLER_CONFIG: wrangler.production.jsonc
+        run: >-
+          yarn workspace @saqi/site wrangler deploy --dry-run
+          --config wrangler.www.jsonc
+          --outdir "${RUNNER_TEMP:?RUNNER_TEMP must be set}/www-dry-run"
+
+      - name: Verify the deployment commit
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code
+
+      - name: Verify the production D1 identity
+        if: steps.changes.outputs.deployment_required == 'true'
+        run: >-
+          yarn workspace @saqi/app db:execute --remote --json
+          --command "SELECT database_id AS databaseId FROM production_deployment_identity WHERE scope = 'production'"
+          | node scripts/verify-production-d1-identity.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
+
+      - name: Require the staged legacy translation retirement
+        run: >-
+          yarn workspace @saqi/app db:execute --remote --json
+          --command "SELECT COUNT(*) AS applied FROM d1_migrations WHERE name = '0037_retire_legacy_translation_tasks.sql'"
+          | node ../.github/scripts/verify-retirement-migration.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
+
+      - name: Expand the production schema
+        if: steps.changes.outputs.migrate == 'true'
+        run: yarn workspace @saqi/app db:migrate:remote
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
+
+      - name: Configure authenticated operations secrets
+        if: steps.changes.outputs.app == 'true'
+        run: node ../.github/scripts/configure-ops-secrets.mjs
+        env:
+          CF_CACHE_PURGE_TOKEN: ${{ secrets.CF_CACHE_PURGE_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          CF_ACCESS_AUD: ${{ secrets.CF_ACCESS_AUD }}
+          CF_ACCESS_TEAM_DOMAIN: ${{ secrets.CF_ACCESS_TEAM_DOMAIN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_OPS_DEPLOY_TOKEN }}
+          SAQI_SOURCE_BASE_URL: ${{ secrets.SAQI_SOURCE_BASE_URL }}
+          SAQI_SOURCE_ADAPTER_CONFIG: ${{ secrets.SAQI_SOURCE_ADAPTER_CONFIG }}
+          SAQI_SOURCE_NAME: ${{ secrets.SAQI_SOURCE_NAME }}
+
+      - name: Deploy authenticated operations
+        if: steps.changes.outputs.app == 'true'
+        run: yarn workspace @saqi/app deploy:artifact
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_OPS_DEPLOY_TOKEN }}
+
+      - name: Deploy the public catalog
+        if: steps.changes.outputs.site == 'true'
+        run: >-
+          yarn workspace @saqi/site wrangler deploy
+          --config dist/server/wrangler.json
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PUBLIC_DEPLOY_TOKEN }}
+
+      - name: Deploy the canonical-host redirect
+        if: steps.changes.outputs.www == 'true'
+        run: yarn workspace @saqi/site deploy:www
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PUBLIC_DEPLOY_TOKEN }}
+
+      - name: Verify production canaries
+        if: steps.changes.outputs.deployment_required == 'true'
+        run: ../.github/scripts/verify-production-canaries.sh
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}

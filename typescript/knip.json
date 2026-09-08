@@ -1,0 +1,44 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [],
+      "project": ["*.mjs"]
+    },
+    "packages/precedent-iso": {
+      "project": ["src/**/*.ts"]
+    },
+    "packages/precedent-node": {
+      "project": ["src/**/*.ts"],
+      "ignoreIssues": {
+        "src/services/schema.ts": ["exports"]
+      }
+    },
+    "packages/crawler-local": {
+      "entry": ["src/offline-scale-benchmark.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/source-adapter": {
+      "project": ["src/**/*.ts"]
+    },
+    "packages/app": {
+      "entry": ["src/app/**/*.{ts,tsx}", "open-next.config.ts"],
+      "project": ["src/**/*.{ts,tsx}", "*.{ts,mjs}"]
+    },
+    "packages/site": {
+      "entry": ["src/pages/**/*.{astro,ts}"],
+      "project": ["src/**/*.{astro,ts}", "tests/*.{mjs,ts}"]
+    }
+  },
+  "ignoreDependencies": [
+    "eslint-plugin-simple-import-sort",
+    "cloudflare",
+    "@eslint/js",
+    "react-doctor",
+    "tailwindcss",
+    "typescript-eslint"
+  ],
+  "ignoreBinaries": ["mkfifo", "plutil"],
+  "ignore": ["eslint.strict.mjs"],
+  "ignoreExportsUsedInFile": false
+}

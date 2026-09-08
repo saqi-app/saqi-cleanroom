@@ -1,0 +1,47 @@
+{
+  "name": "@saqi/crawler-local",
+  "description": "Restart-safe local collection and enrichment coordinator for Saqi",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "saqi-crawler": "./dist/cli.js"
+  },
+  "packageManager": "yarn@4.16.0",
+  "private": true,
+  "sideEffects": false,
+  "scripts": {
+    "benchmark:offline": "yarn build && node dist/offline-scale-benchmark.js",
+    "build": "tsc && node scripts/finalize-build.mjs",
+    "check": "yarn check::format && yarn check::lint && yarn check::types",
+    "check::format": "prettier --check .",
+    "check::lint": "eslint . --max-warnings 0",
+    "check::types": "tsc --noEmit",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "fix": "prettier --write . && yarn fix::lint",
+    "fix::lint": "eslint . --fix --max-warnings 0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@saqi/precedent-iso": "workspace:^",
+    "@saqi/source-adapter": "workspace:^",
+    "better-sqlite3": "^13.0.3",
+    "playwright-core": "1.63.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "eslint": "10.10.0",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
+  }
+}

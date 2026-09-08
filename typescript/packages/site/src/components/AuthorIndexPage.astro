@@ -1,0 +1,81 @@
+---
+import type { AuthorIndexPage } from "../lib/catalog";
+
+import IndexFilter from "./IndexFilter.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { metaDescription, pageTitle } from "../lib/metadata";
+import { authorPath } from "../lib/routes";
+
+interface Props {
+  page: AuthorIndexPage;
+}
+
+const { page } = Astro.props;
+const { authors } = page;
+const title = pageTitle("Poets");
+const siteDescription = "An index of Arabic poems with English translations.";
+const description = metaDescription(siteDescription);
+const canonicalPath = "/";
+const canonical = new URL(canonicalPath, Astro.site).href;
+const structuredData = [
+  {
+    "@type": "WebSite",
+    "@id": `${new URL("/", Astro.site).href}#website`,
+    url: new URL("/", Astro.site).href,
+    name: "Saqi",
+    alternateName: "ساقي",
+    description: siteDescription,
+    inLanguage: ["ar", "en"],
+  },
+  {
+    "@type": "CollectionPage",
+    "@id": `${canonical}#collection`,
+    url: canonical,
+    name: title,
+    description,
+    isPartOf: { "@id": `${new URL("/", Astro.site).href}#website` },
+    about: { "@type": "Thing", name: "Arabic poetry" },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: authors.length,
+      itemListOrder: "https://schema.org/ItemListOrderAscending",
+    },
+  },
+];
+---
+
+<BaseLayout
+  title={title}
+  description={description}
+  canonicalPath={canonicalPath}
+  structuredData={structuredData}
+>
+  <nav class="breadcrumbs root-identity" aria-label="Breadcrumb">
+    <h1 aria-current="page">Poets</h1>
+  </nav>
+  <IndexFilter
+    slot="header-tools"
+    label="Search poets by Arabic or English name"
+    placeholder="Search poets"
+    itemName="poets"
+    listId="author-index"
+    total={authors.length}
+  />
+  <ul class="index-list" id="author-index">
+    {
+      authors.map(({ author, poemCount }) => (
+        <li>
+          <a href={authorPath(author)}>
+            <span class="index-primary" lang="ar" dir="rtl">{author.nameArabic}</span>
+            {author.nameEnglish
+              ? <span class="index-secondary" lang="en" dir="ltr">{author.nameEnglish}</span>
+              : <span class="index-secondary" aria-hidden="true">&nbsp;</span>}
+            <span class="meta" aria-hidden="true" title={`${poemCount} ${poemCount === 1 ? "poem" : "poems"}`}>{poemCount}</span>
+            <span class="visually-hidden">{poemCount} {poemCount === 1 ? "poem" : "poems"}</span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+  <p class="filter-empty" data-filter-empty-for="author-index" hidden>No poets found.</p>
+</BaseLayout>

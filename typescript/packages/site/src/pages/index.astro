@@ -1,0 +1,10 @@
+---
+import { env } from "cloudflare:workers";
+
+import AuthorIndexPage from "../components/AuthorIndexPage.astro";
+import { CatalogRepository } from "../lib/catalog";
+
+const page = await CatalogRepository.fromD1(env.DB).getAuthorIndex();
+---
+
+<AuthorIndexPage page={page} />

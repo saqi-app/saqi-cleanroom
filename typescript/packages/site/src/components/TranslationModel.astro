@@ -1,0 +1,60 @@
+---
+import {
+  translationModelName,
+  type TranslationTrack,
+} from "../lib/poem-translations";
+import ModelProviderIcon from "./ModelProviderIcon.astro";
+
+interface Props {
+  tracks: TranslationTrack[];
+}
+
+const { tracks } = Astro.props;
+const models = tracks.map((track, index) => ({
+  attributionNote: track.attributionNote,
+  key: track.key,
+  name: track.model
+    ? translationModelName(track.model)
+    : `Translation ${String(index + 1)}`,
+  provider: track.provider,
+}));
+const primary = models[0];
+const hasIcons = models.some(({ provider }) => provider !== undefined);
+const attributionNotes = [...new Set(models.flatMap(({ attributionNote }) => attributionNote ? [attributionNote] : []))];
+const attributionDescription = attributionNotes.length > 0
+  ? "translation-model-attribution"
+  : undefined;
+---
+
+{primary && (models.length > 1 || primary.provider) && (
+  <span class="translation-model">
+    {models.length === 1 && <span class="visually-hidden">Translation model: </span>}
+    {hasIcons && <span class="translation-model-icons" aria-hidden="true">
+      {models.map((model, index) => model.provider && (
+        <span
+          class="translation-model-icon"
+          data-translation-model-icon={model.key}
+          hidden={index > 0}
+        >
+          <ModelProviderIcon provider={model.provider} />
+        </span>
+      ))}
+    </span>}
+    {models.length > 1 ? (
+      <select
+        id="translation-track"
+        class="translation-model-select"
+        aria-label="Translation model"
+        aria-describedby={attributionDescription}
+        aria-controls="poem-verses"
+        title={attributionNotes.join(" ") || undefined}
+        disabled
+      >
+        {models.map((model) => <option value={model.key} title={model.attributionNote}>{model.name}</option>)}
+      </select>
+    ) : (
+      <span class="translation-model-name" aria-describedby={attributionDescription} title={primary.attributionNote}>{primary.name}</span>
+    )}
+    {attributionDescription && <span id={attributionDescription} class="visually-hidden">{attributionNotes.join(" ")}</span>}
+  </span>
+)}

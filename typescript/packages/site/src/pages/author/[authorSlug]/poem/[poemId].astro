@@ -1,0 +1,319 @@
+---
+import { env } from "cloudflare:workers";
+
+import BaseLayout from "../../../../layouts/BaseLayout.astro";
+import ModelProviderIcon from "../../../../components/ModelProviderIcon.astro";
+import TranslationModel from "../../../../components/TranslationModel.astro";
+import { CatalogRepository } from "../../../../lib/catalog";
+import { contextualPageTitle, metaDescription } from "../../../../lib/metadata";
+import {
+  poemTranslationTracks,
+  poemWordGlossTracks,
+  translatedLineCount,
+} from "../../../../lib/poem-translations";
+import { authorPath, englishAuthorLabel, poemPath } from "../../../../lib/routes";
+
+const page = await CatalogRepository.fromD1(env.DB).getPoemPage(
+  Astro.params.authorSlug ?? "",
+  Astro.params.poemId ?? "",
+);
+if (!page) {
+  Astro.response.status = 404;
+  return Astro.rewrite("/404");
+}
+const { author, poem } = page;
+const poemName = poem.nameEnglish
+  ? `${poem.nameArabic} (${poem.nameEnglish})`
+  : poem.nameArabic;
+const authorName = author.nameEnglish ?? author.nameArabic;
+const breadcrumbAuthorName = englishAuthorLabel(author);
+const breadcrumbAuthorIsArabic = breadcrumbAuthorName === author.nameArabic;
+const translationTracks = poemTranslationTracks(poem);
+const wordGlossTracks = poemWordGlossTracks(poem);
+const primaryTranslation = translationTracks[0];
+const baytCount = Math.ceil(poem.linesArabic.length / 2);
+const bayts = Array.from({ length: baytCount }, (_, index) => {
+  return {
+    hemistichs: Array.from({ length: 2 }, (_, hemistichIndex) => {
+      const lineIndex = index * 2 + hemistichIndex;
+      return {
+        arabic: poem.linesArabic[lineIndex],
+        glosses: wordGlossTracks.flatMap((track) => {
+          const glossLine = track.wordGlosses.lines.find(
+            (line) => line.lineIndex === lineIndex,
+          );
+          return glossLine ? [{ ...track, segments: glossLine.segments }] : [];
+        }),
+        translations: translationTracks.map((track) => ({
+          key: track.key,
+          line: track.lines[lineIndex],
+        })),
+      };
+    }),
+  };
+});
+const arabicLineCount = poem.linesArabic.filter(
+  (line) => line.trim().length > 0,
+).length;
+const bestTranslatedLineCount = Math.max(
+  0,
+  ...translationTracks.map((track) => translatedLineCount(track.lines, poem.linesArabic)),
+);
+const translationDescription =
+  bestTranslatedLineCount === arabicLineCount
+    ? " with a complete English translation"
+    : bestTranslatedLineCount > 0
+      ? " with a partial English translation"
+      : "";
+const title = contextualPageTitle(poem.nameArabic, authorName);
+const description = metaDescription(
+  `Read this ${poem.verses}-verse Arabic poem by ${authorName}${translationDescription}.`,
+);
+const canonical = new URL(poemPath(author, poem), Astro.site).href;
+const structuredData = [
+  {
+    "@type": "CreativeWork",
+    "@id": `${canonical}#poem`,
+    url: canonical,
+    name: poem.nameArabic,
+    ...(poem.nameEnglish ? { alternateName: poem.nameEnglish } : {}),
+    description,
+    inLanguage: bestTranslatedLineCount > 0 ? ["ar", "en"] : "ar",
+    author: {
+      "@type": "Person",
+      "@id": `${new URL(authorPath(author), Astro.site).href}#poet`,
+      name: author.nameArabic,
+      ...(author.nameEnglish ? { alternateName: author.nameEnglish } : {}),
+    },
+    isPartOf: { "@id": `${new URL("/", Astro.site).href}#website` },
+  },
+  {
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Poets",
+        item: new URL("/", Astro.site).href,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: authorName,
+        item: new URL(authorPath(author), Astro.site).href,
+      },
+      { "@type": "ListItem", position: 3, name: poemName, item: canonical },
+    ],
+  },
+];
+---
+
+<BaseLayout
+  title={title}
+  description={description}
+  canonicalPath={poemPath(author, poem)}
+  openGraphType="article"
+  structuredData={structuredData}
+>
+  {primaryTranslation && (
+    <div slot="header-actions" class="poem-tools" role="group" aria-label="Poem tools">
+      <TranslationModel tracks={translationTracks} />
+    </div>
+  )}
+  <nav class="breadcrumbs poem-identity" aria-label="Breadcrumb">
+    <a href="/">Poets</a>
+    <span aria-hidden="true">/</span>
+    <a
+      href={authorPath(author)}
+      title={breadcrumbAuthorName}
+      lang={breadcrumbAuthorIsArabic ? "ar" : "en"}
+      dir={breadcrumbAuthorIsArabic ? "rtl" : "ltr"}
+    ><bdi dir={breadcrumbAuthorIsArabic ? "rtl" : "ltr"}>{breadcrumbAuthorName}</bdi></a>
+    <span class="poem-title-separator" aria-hidden="true">/</span>
+    <h1
+      id="poem-title"
+      title={poem.nameEnglish ?? poem.nameArabic}
+      tabindex="0"
+      lang={poem.nameEnglish ? "en" : "ar"}
+      dir={poem.nameEnglish ? "ltr" : "rtl"}
+      aria-current="page"
+    >
+      <bdi dir={poem.nameEnglish ? "ltr" : "rtl"}>{poem.nameEnglish ?? poem.nameArabic}</bdi>
+    </h1>
+  </nav>
+
+  <article class="poem" aria-labelledby="poem-title">
+    <ol class="poem-verses" id="poem-verses" role="list">
+      {bayts.map((bayt, index) => (
+        <li class="bayt" aria-label={`Verse ${index + 1}`}>
+          <span class="verse-number" aria-hidden="true">{index + 1}</span>
+          <div class="hemistichs">
+            {bayt.hemistichs.map((hemistich, hemistichIndex) => (
+              hemistich.arabic?.trim() && (
+                <>
+                  {hemistich.glosses.map((gloss) => (
+                    <p
+                      class:list={["arabic-line", hemistichIndex === 0 ? "hemistich-first" : "hemistich-second"]}
+                      data-word-gloss-line={gloss.key}
+                      lang="ar"
+                      dir="rtl"
+                      hidden={gloss.key !== primaryTranslation?.key}
+                    >
+                      {gloss.segments.map((segment) => segment.kind === "text" ? (
+                        segment.surface
+                      ) : (
+                        <button
+                          class="word-gloss"
+                          type="button"
+                          aria-controls="word-gloss-popover"
+                          data-word-surface={segment.surface}
+                          data-word-meaning={segment.meaning}
+                          data-word-model={gloss.model}
+                          data-word-provider={gloss.provider}
+                          aria-label={`${segment.surface}: ${segment.meaning}`}
+                        >{segment.surface}</button>
+                      ))}
+                    </p>
+                  ))}
+                  <p
+                    class:list={["arabic-line", hemistichIndex === 0 ? "hemistich-first" : "hemistich-second"]}
+                    data-word-gloss-fallback
+                    lang="ar"
+                    dir="rtl"
+                    hidden={hemistich.glosses.some(
+                      ({ key }) => key === primaryTranslation?.key,
+                    )}
+                  >{hemistich.arabic.trim()}</p>
+                </>
+              )
+            ))}
+            {bayt.hemistichs.map((hemistich, hemistichIndex) => (
+              <>
+                {hemistich.translations.map((translation, trackIndex) => (
+                  translation.line?.trim() && (
+                    <p
+                      class:list={[
+                        "translation",
+                        hemistichIndex === 0 ? "hemistich-first" : "hemistich-second",
+                        hemistichIndex === 1 &&
+                        !bayt.hemistichs[0]?.translations[trackIndex]?.line?.trim()
+                          ? "translation-without-first"
+                          : undefined,
+                      ]}
+                      data-translation={translation.key}
+                      lang="en"
+                      dir="ltr"
+                      hidden={trackIndex > 0}
+                    >
+                      {translation.line}
+                    </p>
+                  )
+                ))}
+              </>
+            ))}
+          </div>
+        </li>
+      ))}
+    </ol>
+  </article>
+
+  {wordGlossTracks.length > 0 && (
+    <>
+      <div id="word-gloss-popover" class="word-gloss-popover" popover="auto" lang="en" dir="ltr">
+        <p class="word-gloss-surface" lang="ar" dir="rtl"></p>
+        <p class="word-gloss-meaning"></p>
+        <p class="word-gloss-model">
+          {Array.from(new Set(wordGlossTracks.map(({ provider }) => provider))).map((provider, index) => (
+            <span data-word-provider-icon={provider} hidden={index > 0} aria-hidden="true">
+              <ModelProviderIcon provider={provider} />
+            </span>
+          ))}
+          <span>{wordGlossTracks[0]?.model}</span>
+        </p>
+      </div>
+      <details class="word-meanings" id="word-meanings">
+        <summary>Word meanings</summary>
+        {wordGlossTracks.map((track) => (
+          <section data-word-glossary={track.key} hidden={track !== wordGlossTracks[0]}>
+            <h2>{track.model}</h2>
+            <dl>
+              {track.wordGlosses.lines.flatMap((line) =>
+                line.segments.flatMap((segment) =>
+                  segment.kind === "word"
+                    ? [<><dt lang="ar" dir="rtl">{segment.surface}</dt><dd>{segment.meaning}</dd></>]
+                    : [],
+                )
+              )}
+            </dl>
+          </section>
+        ))}
+      </details>
+    </>
+  )}
+
+  <script>
+    const translationSelect = document.querySelector("#translation-track");
+    if (translationSelect instanceof HTMLSelectElement) {
+      translationSelect.disabled = false;
+
+      const syncTranslation = () => {
+        for (const translation of document.querySelectorAll("[data-translation]")) {
+          if (!(translation instanceof HTMLElement)) continue;
+          translation.hidden = translation.dataset.translation !== translationSelect.value;
+        }
+        for (const icon of document.querySelectorAll("[data-translation-model-icon]")) {
+          if (!(icon instanceof HTMLElement)) continue;
+          icon.hidden = icon.dataset.translationModelIcon !== translationSelect.value;
+        }
+        let hasGlosses = false;
+        for (const line of document.querySelectorAll("[data-word-gloss-line]")) {
+          if (!(line instanceof HTMLElement)) continue;
+          line.hidden = line.dataset.wordGlossLine !== translationSelect.value;
+          if (!line.hidden) hasGlosses = true;
+        }
+        for (const fallback of document.querySelectorAll("[data-word-gloss-fallback]")) {
+          if (fallback instanceof HTMLElement) fallback.hidden = hasGlosses;
+        }
+        for (const glossary of document.querySelectorAll("[data-word-glossary]")) {
+          if (!(glossary instanceof HTMLElement)) continue;
+          glossary.hidden = glossary.dataset.wordGlossary !== translationSelect.value;
+        }
+      };
+      translationSelect.addEventListener("change", syncTranslation);
+      syncTranslation();
+    }
+
+    const popover = document.querySelector("#word-gloss-popover");
+    if (popover instanceof HTMLElement) {
+      const showMeaning = (trigger: Element) => {
+        if (!(trigger instanceof HTMLElement)) return;
+        const surface = popover.querySelector(".word-gloss-surface");
+        const meaning = popover.querySelector(".word-gloss-meaning");
+        const model = popover.querySelector(".word-gloss-model > span:last-child");
+        if (surface) surface.textContent = trigger.dataset.wordSurface ?? "";
+        if (meaning) meaning.textContent = trigger.dataset.wordMeaning ?? "";
+        if (model) model.textContent = trigger.dataset.wordModel ?? "";
+        for (const icon of popover.querySelectorAll("[data-word-provider-icon]")) {
+          if (icon instanceof HTMLElement) {
+            icon.hidden = icon.dataset.wordProviderIcon !== trigger.dataset.wordProvider;
+          }
+        }
+      };
+      for (const trigger of document.querySelectorAll(".word-gloss")) {
+        trigger.addEventListener("click", () => {
+          showMeaning(trigger);
+          popover.showPopover();
+        });
+        trigger.addEventListener("focus", () => {
+          showMeaning(trigger);
+          popover.showPopover();
+        });
+        trigger.addEventListener("pointerenter", (event) => {
+          if (event instanceof PointerEvent && event.pointerType === "touch") return;
+          showMeaning(trigger);
+          popover.showPopover();
+        });
+      }
+    }
+  </script>
+</BaseLayout>

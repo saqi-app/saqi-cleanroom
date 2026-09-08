@@ -1,0 +1,8 @@
+---
+const pageNumber = Astro.params.pageNumber ?? "";
+if (!/^[1-9]\d*$/u.test(pageNumber) || !Number.isSafeInteger(Number(pageNumber))) {
+  Astro.response.status = 404;
+  return Astro.rewrite("/404");
+}
+return Astro.redirect("/", 308);
+---

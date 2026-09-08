@@ -1,0 +1,16 @@
+---
+import { env } from "cloudflare:workers";
+
+import AuthorCatalogPage from "../../../components/AuthorCatalogPage.astro";
+import { CatalogRepository } from "../../../lib/catalog";
+
+const page = await CatalogRepository.fromD1(env.DB).getAuthorPage(
+  Astro.params.authorSlug ?? "",
+);
+if (!page) {
+  Astro.response.status = 404;
+  return Astro.rewrite("/404");
+}
+---
+
+<AuthorCatalogPage page={page} />

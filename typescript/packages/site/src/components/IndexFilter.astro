@@ -1,0 +1,42 @@
+---
+interface Props {
+  label: string;
+  placeholder: string;
+  itemName: string;
+  listId: string;
+  total: number;
+}
+
+const { label, placeholder, itemName, listId, total } = Astro.props;
+const inputId = `filter-${itemName.replaceAll(/[^a-z0-9]/gi, "-").toLowerCase()}`;
+const initialItemName = total === 1 ? itemName.replace(/s$/, "") : itemName;
+---
+
+<search
+  class="filter"
+  aria-label={label}
+  data-filter-root
+  data-filter-list={listId}
+  data-filter-item-name={itemName}
+  data-filter-pending
+  aria-hidden="true"
+  hidden
+>
+  <label class="visually-hidden" for={inputId}>{label}</label>
+  <input
+    id={inputId}
+    type="search"
+    placeholder={placeholder}
+    autocomplete="off"
+    autocapitalize="none"
+    spellcheck="false"
+    aria-controls={listId}
+    data-filter-input
+    disabled
+  />
+  <output class="filter-status visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-filter-status>
+    {total} {initialItemName}
+  </output>
+</search>
+
+<script src="../scripts/index-filter.js"></script>

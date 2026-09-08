@@ -1,0 +1,40 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "saqi-public",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "preview_urls": false,
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "saqi.app", "custom_domain": true },
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "saqi-db",
+      "database_id": "ffaae610-4dae-4d7e-bf86-8232f46ca2b5"
+    }
+  ],
+  "cache": {
+    "enabled": true,
+    "cross_version_cache": false
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "drop-trailing-slash",
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 0.01,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.001
+    }
+  },
+}

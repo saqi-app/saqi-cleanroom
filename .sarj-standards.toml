@@ -1,0 +1,20 @@
+# Managed by `code-standards setup`; commit this file.
+schema = 4
+bundle = "7.14.8"
+profile = "application"
+rule_profile = "all"
+
+[capabilities]
+disable = ["ruff", "pyright", "swiftformat", "swiftlint", "ktlint", "detekt", "mobile-security"]
+
+[artifacts]
+durable = ["**/README.md", "docs/**", "**/docs/**", "architecture/**", "**/adr/**", ".github/**", "**/AGENTS.md", "**/CLAUDE.md"]
+
+[dest]
+python = "."
+typescript = "typescript"
+swift = "."
+kotlin = "."
+
+[hooks]
+manager = "pre-commit"

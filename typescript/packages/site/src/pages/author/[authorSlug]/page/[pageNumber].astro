@@ -1,0 +1,23 @@
+---
+import { env } from "cloudflare:workers";
+
+import AuthorCatalogPage from "../../../../components/AuthorCatalogPage.astro";
+import { CatalogRepository } from "../../../../lib/catalog";
+
+const pageNumberText = Astro.params.pageNumber ?? "";
+const pageNumber = /^[1-9]\d*$/u.test(pageNumberText) ? Number(pageNumberText) : 0;
+const authorSlug = Astro.params.authorSlug ?? "";
+const page = await CatalogRepository.fromD1(env.DB).getAuthorPage(
+  authorSlug,
+  pageNumber,
+);
+if (!page) {
+  Astro.response.status = 404;
+  return Astro.rewrite("/404");
+}
+if (pageNumber === 1) {
+  return Astro.redirect(`/author/${encodeURIComponent(page.author.slug)}`, 308);
+}
+---
+
+<AuthorCatalogPage page={page} />

@@ -1,0 +1,17 @@
+import { SAQI_PRODUCTION_DATABASE_ID } from "@saqi/precedent-iso";
+
+const chunks = [];
+process.stdin.setEncoding("utf8");
+for await (const chunk of process.stdin) chunks.push(chunk);
+const input = chunks.join("");
+const executions = JSON.parse(input);
+const rows = Array.isArray(executions)
+  ? executions.flatMap((execution) => execution.results ?? [])
+  : [];
+
+if (
+  rows.length !== 1 ||
+  rows[0]?.databaseId !== SAQI_PRODUCTION_DATABASE_ID
+) {
+  throw new Error("PRODUCTION_DATABASE_IDENTITY_MISMATCH");
+}

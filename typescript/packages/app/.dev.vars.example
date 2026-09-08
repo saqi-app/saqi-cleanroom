@@ -1,0 +1,8 @@
+# Copy to .dev.vars for local development only. Never commit real values.
+CF_ACCESS_TEAM_DOMAIN=https://example.cloudflareaccess.com
+CF_ACCESS_AUD=replace-with-access-application-audience
+CF_CACHE_PURGE_TOKEN=replace-with-cache-purge-token
+CF_ZONE_ID=replace-with-zone-id
+SAQI_SOURCE_NAME=source
+SAQI_SOURCE_BASE_URL=https://source.example
+SAQI_SOURCE_ADAPTER_CONFIG={"schemaVersion":1,"routes":{"authorPath":"/writers/{slug}","feedPath":"/writers/{authorId}/feed","inventoryPath":"/directory/{page}","poemPath":"/works/{id}","poemSlug":"work-{id}"},"feed":{"authorIdFormat":"slug","cursorKeys":["cursor"],"cursorParameter":"cursor","endpointMarker":"/feed","responseHtmlKey":"content","responseNextCursorKey":"nextCursor","tokenKeys":["token"],"tokenParameter":"token"},"labels":{"freeVerse":["free verse"],"poemCount":["poems"],"verseCount":["verses"]},"dom":{"authorContainerSelector":"article","authorLinkSelector":"a[href*='/writers/']","detailAuthorLinkSelector":"a[href*='/writers/']","detailClassicalLineSelector":":scope > h3","detailContentSelector":"[data-poem-content]","detailFallbackLineSelector":":scope > p","detailStructureLabelSelector":"main span","manifestContainerSelector":"article","manifestPoemLinkSelector":"a[href*='/works/']","nextPageLinkSelector":"a[rel='next']"}}

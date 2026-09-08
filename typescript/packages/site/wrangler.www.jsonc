@@ -1,0 +1,21 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "saqi-www",
+  "main": "www-worker.ts",
+  "compatibility_date": "2026-08-22",
+  "preview_urls": false,
+  "workers_dev": false,
+  "routes": [{ "pattern": "www.saqi.app", "custom_domain": true }],
+  "cache": {
+    "enabled": true,
+    "cross_version_cache": false
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 0.01,
+      "invocation_logs": true
+    }
+  }
+}

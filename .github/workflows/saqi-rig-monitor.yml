@@ -1,0 +1,96 @@
+name: Saqi Rig Monitor
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'macos/SaqiRigMonitor/**'
+      - 'Mintfile.mobile.strict'
+      - '.github/workflows/saqi-rig-monitor.yml'
+  # Pull requests retain the required macOS gate. Main is not rebuilt after
+  # merging the exact revision that already passed it; operators can still
+  # request a fresh main-branch verification when needed.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: saqi-rig-monitor-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Release build and tests
+    runs-on: macos-15
+    # A new toolchain identity needs one cold Mint compile before it can seed
+    # the exact-key cache. Warm runs remain fast, while cold runs retain enough
+    # time to execute every strict check after compilation.
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: macos/SaqiRigMonitor
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Swift tooling launcher
+        run: brew install mint
+        working-directory: ${{ github.workspace }}
+
+      - name: Resolve Swift tool cache identity
+        id: swift-tool-cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          mint_version_hash="$(mint version 2>&1 | shasum -a 256 | awk '{ print $1 }')"
+          xcode_hash="$(xcodebuild -version 2>&1 | shasum -a 256 | awk '{ print $1 }')"
+          swift_hash="$(swift --version 2>&1 | shasum -a 256 | awk '{ print $1 }')"
+          mintfile_hash="$(shasum -a 256 Mintfile.mobile.strict | awk '{ print $1 }')"
+          printf 'cache-key=mint-tools-v1-%s-%s-%s-%s-%s-%s\n' \
+            "$RUNNER_OS" "$RUNNER_ARCH" "$xcode_hash" "$swift_hash" \
+            "$mint_version_hash" "$mintfile_hash" >> "$GITHUB_OUTPUT"
+        working-directory: ${{ github.workspace }}
+
+      - name: Restore compiled Swift tools
+        id: mint-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.mint
+          key: ${{ steps.swift-tool-cache.outputs.cache-key }}
+
+      - name: Compile pinned Swift tools
+        if: steps.mint-cache.outputs.cache-hit != 'true'
+        run: mint bootstrap --mintfile Mintfile.mobile.strict
+        working-directory: ${{ github.workspace }}
+
+      - name: Save compiled Swift tools
+        if: steps.mint-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.mint
+          key: ${{ steps.mint-cache.outputs.cache-primary-key }}
+
+      - name: Check Swift formatting
+        run: >-
+          mint run --mintfile ../../Mintfile.mobile.strict
+          nicklockwood/SwiftFormat swiftformat --lint
+          --config .swiftformat .
+
+      - name: Lint Swift
+        run: >-
+          mint run --mintfile ../../Mintfile.mobile.strict
+          realm/SwiftLint swiftlint lint --strict --no-cache
+          --config .swiftlint.yml .
+
+      # Release-mode tests compile the executable and test targets together,
+      # avoiding a second debug build of the same package.
+      - name: Build release executable and run tests
+        run: swift test --configuration release

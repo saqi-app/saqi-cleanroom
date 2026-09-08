@@ -1,0 +1,17 @@
+{
+  "fontToolsVersion": "4.59.2",
+  "fonts": [
+    {
+      "family": "Amiri",
+      "version": "1.003",
+      "source": "https://github.com/aliftype/amiri/releases/download/1.003/Amiri-1.003.zip",
+      "sourceSha256": "81af0aff7d2086d8af24cea7202f7546130997982534691373485cd96744d05e",
+      "input": "Amiri-1.003/Amiri-Regular.ttf",
+      "inputSha256": "cd2550c0f4c05eb341bf97958211aaa39382bca96577ba3a67d4a3b4912c43c0",
+      "output": "amiri-saqi-v1.003.woff2",
+      "outputSha256": "bc016b972dfd59f89aa988dd6083f6b6168856875a1c5885871ca30deba43133",
+      "subsetUnicodeRange": "U+0020,U+0028-0029,U+002C-003B,U+003F,U+005B-005D,U+0061,U+0069,U+0071,U+0073,U+00AB,U+00BB,U+0600-0604,U+0606-06FF,U+0750-077F,U+0890-0891,U+08A0,U+08AC,U+08B6-08BD,U+08D1,U+08E4-08FE,U+200C-200F,U+202A-202E",
+      "license": "Amiri-OFL.txt"
+    }
+  ]
+}

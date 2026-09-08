@@ -1,0 +1,102 @@
+---
+import amiriFontUrl from "../assets/fonts/amiri-saqi-v1.003.woff2?url";
+import amiriLicenseUrl from "../assets/fonts/Amiri-OFL.txt?url";
+import { serializeJsonForHtml } from "../lib/serialize-json-for-html";
+import globalCssUrl from "../styles/global.css?url";
+
+interface Props {
+  title: string;
+  description: string;
+  canonicalPath: string;
+  nextPath?: string;
+  noindex?: boolean;
+  openGraphType?: "article" | "website";
+  previousPath?: string;
+  structuredData?: Record<string, unknown> | Record<string, unknown>[];
+}
+
+const {
+  title,
+  description,
+  canonicalPath,
+  nextPath,
+  noindex = false,
+  openGraphType = "website",
+  previousPath,
+  structuredData,
+} = Astro.props;
+const canonical = new URL(canonicalPath, Astro.site);
+const jsonLd = structuredData
+  ? {
+      "@context": "https://schema.org",
+      "@graph": Array.isArray(structuredData) ? structuredData : [structuredData],
+    }
+  : undefined;
+const serializedJsonLd = jsonLd ? serializeJsonForHtml(jsonLd) : undefined;
+const hasHeaderTools = Astro.slots.has("header-tools");
+const hasHeaderActions = Astro.slots.has("header-actions");
+Astro.response.headers.append(
+  "Link",
+  [
+    `<${globalCssUrl}>; rel=preload; as=style`,
+    `<${amiriFontUrl}>; rel=preload; as=font; type="font/woff2"; crossorigin`,
+  ].join(", "),
+);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" href="/favicon-v2.svg" type="image/svg+xml" />
+    <link rel="license" href={amiriLicenseUrl} title="Amiri font license" />
+    <link rel="stylesheet" href={globalCssUrl} />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f8f7" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1513" />
+    <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex, follow" />}
+    <link rel="canonical" href={canonical} />
+    {previousPath && <link rel="prev" href={new URL(previousPath, Astro.site)} />}
+    {nextPath && <link rel="next" href={new URL(nextPath, Astro.site)} />}
+    <meta property="og:type" content={openGraphType} />
+    <meta property="og:site_name" content="Saqi" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="ar_AR" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {serializedJsonLd && <script is:inline type="application/ld+json" set:html={serializedJsonLd} />}
+    <title>{title}</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header
+      class:list={[
+        "site-header",
+        { "has-header-tools": hasHeaderTools, "has-header-actions": hasHeaderActions },
+      ]}
+    >
+      <a class="wordmark" href="/" aria-label="Saqi home">
+        <img class="wordmark-logo" src="/saqi-logo.svg" alt="" width="191" height="129" />
+      </a>
+      {hasHeaderTools && (
+        <div class="site-header-tools">
+          <slot name="header-tools" />
+        </div>
+      )}
+      {hasHeaderActions && (
+        <div class="site-header-actions">
+          <slot name="header-actions" />
+        </div>
+      )}
+    </header>
+    <main id="main-content" tabindex="-1">
+      <slot />
+    </main>
+  </body>
+</html>

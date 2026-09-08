@@ -1,0 +1,156 @@
+---
+import type { AuthorPage } from "../lib/catalog";
+
+import IndexFilter from "./IndexFilter.astro";
+import ModelProviderIcon from "./ModelProviderIcon.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { metaDescription, pageTitle } from "../lib/metadata";
+import { authorPagePath, englishAuthorLabel, poemPath } from "../lib/routes";
+
+interface Props {
+  page: AuthorPage;
+}
+
+const { page } = Astro.props;
+const { author, pageCount, pageNumber, poemCount, poems } = page;
+const breadcrumbName = englishAuthorLabel(author);
+const breadcrumbIsArabic = breadcrumbName === author.nameArabic;
+const displayName = author.nameEnglish
+  ? `${author.nameArabic} (${author.nameEnglish})`
+  : author.nameArabic;
+const baseTitle = pageTitle(displayName);
+const title = pageNumber === 1 ? baseTitle : `Page ${pageNumber} | ${baseTitle}`;
+const description = metaDescription(
+  `Read ${poemCount} ${poemCount === 1 ? "poem" : "poems"} by ${author.nameEnglish ?? author.nameArabic} in Arabic${poems.some((poem) => poem.hasEnglish) ? " with English translations" : ""}.`,
+);
+const canonicalPath = authorPagePath(author, pageNumber);
+function availableModelNames(poem: AuthorPage["poems"][number]): string {
+  return poem.translationModels.map(({ model, attributionCertainty }) => {
+    if (attributionCertainty === "inferred_range") return `${model} (estimated)`;
+    if (attributionCertainty === "user_supplied") return `${model} (user-attributed)`;
+    return model;
+  }).join(", ");
+}
+const canonical = new URL(canonicalPath, Astro.site).href;
+const authorCanonical = new URL(authorPagePath(author, 1), Astro.site).href;
+const previousPath = pageNumber > 1
+  ? authorPagePath(author, pageNumber - 1)
+  : undefined;
+const nextPath = pageNumber < pageCount
+  ? authorPagePath(author, pageNumber + 1)
+  : undefined;
+const structuredData = [
+  {
+    "@type": "ProfilePage",
+    "@id": `${canonical}#profile`,
+    url: canonical,
+    name: title,
+    description,
+    mainEntity: {
+      "@type": "Person",
+      "@id": `${authorCanonical}#poet`,
+      name: author.nameArabic,
+      ...(author.nameEnglish ? { alternateName: author.nameEnglish } : {}),
+    },
+  },
+  {
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Poets",
+        item: new URL("/", Astro.site).href,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: displayName,
+        item: authorCanonical,
+      },
+      ...(pageNumber > 1
+        ? [{ "@type": "ListItem", position: 3, name: `Page ${pageNumber}`, item: canonical }]
+        : []),
+    ],
+  },
+];
+---
+
+<BaseLayout
+  title={title}
+  description={description}
+  canonicalPath={canonicalPath}
+  previousPath={previousPath}
+  nextPath={nextPath}
+  structuredData={structuredData}
+>
+  <IndexFilter
+    slot="header-tools"
+    label={pageCount > 1 ? "Search poems on this page" : "Search poems"}
+    placeholder={pageCount > 1 ? "Search this page" : "Search poems"}
+    itemName="poems"
+    listId="poem-index"
+    total={poems.length}
+  />
+  <nav class="breadcrumbs author-identity" aria-label="Breadcrumb">
+    <a href="/">Poets</a>
+    <span aria-hidden="true">/</span>
+    <h1
+      title={breadcrumbName}
+      tabindex="0"
+      lang={breadcrumbIsArabic ? "ar" : "en"}
+      dir={breadcrumbIsArabic ? "rtl" : "ltr"}
+      aria-current={pageNumber === 1 ? "page" : undefined}
+    ><bdi dir={breadcrumbIsArabic ? "rtl" : "ltr"}>{breadcrumbName}</bdi></h1>
+    {pageNumber > 1 && (
+      <>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Page {pageNumber}</span>
+      </>
+    )}
+  </nav>
+  <h2 class="visually-hidden">Poems</h2>
+  <ul class="index-list" id="poem-index">
+    {
+      poems.map((poem) => (
+        <li>
+          <a href={poemPath(author, poem)}>
+            <span class="index-primary" lang="ar" dir="rtl">{poem.nameArabic}</span>
+            {poem.nameEnglish
+              ? <span class="index-secondary" lang="en" dir="ltr">{poem.nameEnglish}</span>
+              : <span class="index-secondary" aria-hidden="true">&nbsp;</span>}
+            <span class="poem-list-meta">
+              {poem.translationModels.length > 0 && (
+                <>
+                  <span
+                    class="poem-translation-models"
+                    dir="ltr"
+                    aria-hidden="true"
+                    title={`English translations: ${availableModelNames(poem)}`}
+                  >
+                    {[...new Set(poem.translationModels.map(({ provider }) => provider))].map((provider) => (
+                      <ModelProviderIcon provider={provider} />
+                    ))}
+                  </span>
+                  <span class="visually-hidden">
+                    English translations: {availableModelNames(poem)}.
+                  </span>
+                </>
+              )}
+              <span class="verse-count" aria-hidden="true" title={`${poem.verses} ${poem.verses === 1 ? "verse" : "verses"}`}>{poem.verses}</span>
+              <span class="visually-hidden">{poem.verses} {poem.verses === 1 ? "verse" : "verses"}</span>
+            </span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+  <p class="filter-empty" data-filter-empty-for="poem-index" hidden>No poems found.</p>
+  {pageCount > 1 && (
+    <nav class="pagination" aria-label="Poem pages">
+      {previousPath ? <a rel="prev" href={previousPath}>← Previous</a> : <span />}
+      <span class="meta">Page {pageNumber} of {pageCount}</span>
+      {nextPath ? <a rel="next" href={nextPath}>Next →</a> : <span />}
+    </nav>
+  )}
+</BaseLayout>

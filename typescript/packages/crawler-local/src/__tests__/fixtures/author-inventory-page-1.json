@@ -1,0 +1,12 @@
+{
+  "authors": [
+    { "href": "/writers/a", "name": "أحمد", "poemCountText": "٢ قصيدة" }
+  ],
+  "challengeDetected": false,
+  "kind": "author_inventory_page",
+  "nextPageHref": "/directory/2",
+  "page": 1,
+  "schemaVersion": 1,
+  "sourceUrl": "https://source.invalid/directory/1",
+  "terminal": false
+}
